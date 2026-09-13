@@ -1,0 +1,69 @@
+name: Quarto
+options:
+  bundleIdPrefix: codes.amos
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+settings:
+  base:
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: 6.0
+    DEVELOPMENT_TEAM: 2BN99U32MZ
+targets:
+  Quarto:
+    type: application
+    platform: iOS
+    supportedDestinations:
+      - iOS
+      - macOS
+    sources:
+      - path: Sources
+        excludes:
+          - Info.plist
+    dependencies:
+      - framework: Frameworks/QuartoAdSkip.xcframework
+        embed: false
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Quarto
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - audio
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: "Quarto connects to your self-hosted Audiobookshelf server on your local network or VPN."
+        NSSpeechRecognitionUsageDescription: "Quarto uses on-device speech recognition to detect sponsor breaks and ad segments."
+        NSMicrophoneUsageDescription: "Quarto uses audio recognition to detect sponsor breaks."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: codes.amos.quarto
+        PRODUCT_NAME: Quarto
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Sources/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_TESTABILITY: YES
+    scheme:
+      testTargets:
+        - QuartoTests
+  QuartoTests:
+    type: bundle.unit-test
+    platform: iOS
+    supportedDestinations:
+      - iOS
+      - macOS
+    sources:
+      - path: Tests/QuartoTests
+    dependencies:
+      - target: Quarto
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: codes.amos.quarto.tests

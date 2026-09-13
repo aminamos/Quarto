@@ -1,0 +1,4 @@
+module QuartoAdSkip {
+    header "quarto_adskip.h"
+    export *
+}

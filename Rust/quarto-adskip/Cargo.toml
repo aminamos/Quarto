@@ -1,0 +1,16 @@
+[package]
+name = "quarto-adskip"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "quarto_adskip"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+aho-corasick = "1.1"
+regex = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]

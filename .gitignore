@@ -1,0 +1,8 @@
+.DS_Store
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
+build_*/
+Rust/quarto-adskip/target/
+Quarto.xcodeproj/
