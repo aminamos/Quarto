@@ -13,6 +13,17 @@ Uses the [public Audiobookshelf HTTP API](https://api.audiobookshelf.org/) only.
 - XcodeGen (`brew install xcodegen`)
 - A running Audiobookshelf server
 
+## Cloud builds (no Xcode needed)
+
+A GitHub Actions workflow builds and uploads to TestFlight — trigger it from
+anywhere: GitHub.com > aminamos/Quarto > Actions > "TestFlight" > Run workflow
+(the GitHub mobile app works too).
+
+One-time setup: create an App Store Connect API team key (App Manager role) at
+App Store Connect > Users and Access > Integrations, then add three repo secrets
+(`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` = the .p8 contents) and push
+`.github/workflows/testflight.yml`. Full steps are in the workflow file header.
+
 ## Build
 
 `Quarto.xcodeproj` is a generated project derived from `project.yml`.
