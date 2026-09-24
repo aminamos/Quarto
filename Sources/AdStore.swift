@@ -25,7 +25,7 @@ public struct AdDetectionTip: Codable, Identifiable, Hashable, Sendable {
 }
 
 public enum DetectionSource: String, CaseIterable, Identifiable, Sendable {
-    case server = "Server (4070 Super)"
+    case server = "Backend (RTX 4070 Super)"
     case local = "Local (On-Device)"
     public var id: String { rawValue }
 }
@@ -94,7 +94,7 @@ final class AdStore {
                !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return val
             }
-            let defaultURL = ""
+            let defaultURL = "http://100.121.101.70:5055"
             UserDefaults.standard.set(defaultURL, forKey: "quarto_server_detector_url")
             return defaultURL
         }
@@ -255,13 +255,13 @@ final class AdStore {
         return fresh.count
     }
 
-    func applyCuts(from source: DetectionSource, for episodeId: String) {
-        let cuts: [AdSegment] = switch source {
+    func applyDetections(from source: DetectionSource, for episodeId: String) {
+        let breaks: [AdSegment] = switch source {
         case .server: serverStore[episodeId] ?? []
         case .local: localStore[episodeId] ?? []
         }
-        if !cuts.isEmpty {
-            save(segments: cuts, for: episodeId)
+        if !breaks.isEmpty {
+            save(segments: breaks, for: episodeId)
         }
     }
 
@@ -344,11 +344,11 @@ final class AdStore {
         (await fetchDesktopPlansRaw())?.plans ?? []
     }
 
-    /// True when the worker answers the plans endpoint with a valid shape,
+    /// True when quarto-backend answers the plans endpoint with a valid shape,
     /// even when it holds zero plans. This is the only GPU-alive signal the
-    /// worker exposes, so a timeout followed by reachable here means the job
+    /// backend exposes, so a timeout followed by reachable here means the job
     /// is still processing. Timeout followed by unreachable means trouble.
-    func isWorkerReachable() async -> Bool {
+    func isBackendReachable() async -> Bool {
         await fetchDesktopPlansRaw() != nil
     }
 
@@ -386,13 +386,13 @@ final class AdStore {
         persistTitlePlans()
         lastSyncCount = count
         lastSyncDate = Date()
-        logRemote(service: "ios-adstore", level: "INFO", message: "Synced \(count) plans from 4070 Super into local cache")
+        logRemote(service: "ios-adstore", level: "INFO", message: "Synced \(count) plans from quarto-backend into local cache")
         return count
     }
 
     /// User-triggered server run that survives slow GPU jobs. The direct call
     /// covers fast and cached runs. If it times out, the job is usually still
-    /// running on the worker, so poll the finished plans by episode title
+    /// running on quarto-backend, so poll the finished plans by episode title
     /// instead of failing. Other errors fail fast as before.
     @discardableResult
     func runOnServerAndWait(
@@ -410,11 +410,11 @@ final class AdStore {
         let fast = await detectOnServer(for: episode, force: true)
         if !fast.isEmpty { return fast }
         guard lastServerTimedOut else { return [] }
-        guard await isWorkerReachable() else {
-            lastDetectionError = "The 4070 Super is unreachable. Check that Tailscale is connected and the worker is running."
+        guard await isBackendReachable() else {
+            lastDetectionError = "The detector backend is unreachable. Check that NetBird is connected and quarto-backend is running."
             return []
         }
-        scanStatusMessage = "The 4070 Super is still working. Waiting for the finished plan..."
+        scanStatusMessage = "quarto-backend is still working. Waiting for the finished plan..."
         let deadline = Date().addingTimeInterval(timeout)
         let wanted = Self.slugify(episode.title ?? "")
         while Date() < deadline {
@@ -426,12 +426,12 @@ final class AdStore {
                 serverStore[episode.id] = sorted
                 persistServerStore()
                 lastDetectionError = nil
-                logRemote(service: "ios-adstore", level: "INFO", message: "Picked up slow 4070 Super plan for '\(episode.title ?? "")': \(sorted.count) breaks found", extra: ["breaks_count": String(sorted.count)])
+                logRemote(service: "ios-adstore", level: "INFO", message: "Picked up slow quarto-backend plan for '\(episode.title ?? "")': \(sorted.count) breaks found", extra: ["breaks_count": String(sorted.count)])
                 save(segments: sorted, for: episode.id)
                 return sorted
             }
         }
-        lastDetectionError = "The 4070 Super is still working. Open Settings and use Sync All Plans from 4070 Super later to pick up the finished plan."
+        lastDetectionError = "quarto-backend is still working. Open Settings and use Sync All Plans from Backend later to pick up the finished plan."
         return []
     }
     func clearAllCaches() async {
@@ -519,9 +519,9 @@ final class AdStore {
         recognizer: LiveSpeechRecognizer
     ) async -> [AdSegment] {
         if useServerDetection {
-            let serverCuts = await detectOnServer(for: episode)
-            if !serverCuts.isEmpty {
-                return serverCuts
+            let serverBreaks = await detectOnServer(for: episode)
+            if !serverBreaks.isEmpty {
+                return serverBreaks
             }
         }
         return await detectLocally(
@@ -535,7 +535,7 @@ final class AdStore {
     func detectOnServer(for episode: PodcastEpisode, force: Bool = false) async -> [AdSegment] {
         isScanning = true
         currentScanTitle = episode.title ?? "Episode"
-        scanStatusMessage = "Analyzing on 4070 Super GPU..."
+        scanStatusMessage = "Analyzing on quarto-backend GPU..."
         lastServerTimedOut = false
         defer {
             if !isBatchScanning {
@@ -545,7 +545,7 @@ final class AdStore {
         let trimmedDetectorURL = serverDetectionURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedDetectorURL.isEmpty, let serverURL = URL(string: trimmedDetectorURL) else {
             if !trimmedDetectorURL.isEmpty {
-                lastDetectionError = "The 4070 Super URL is invalid."
+                lastDetectionError = "The backend URL is invalid."
             }
             return []
         }
@@ -561,18 +561,18 @@ final class AdStore {
             "force": force
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: body) else {
-            lastDetectionError = "Could not create the 4070 Super request."
+            lastDetectionError = "Could not create the backend request."
             return []
         }
         req.httpBody = data
         do {
             let (respData, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse else {
-                lastDetectionError = "The 4070 Super returned an invalid response."
+                lastDetectionError = "quarto-backend returned an invalid response."
                 return []
             }
             guard (200...299).contains(http.statusCode) else {
-                lastDetectionError = "The 4070 Super returned HTTP \(http.statusCode)."
+                lastDetectionError = "quarto-backend returned HTTP \(http.statusCode)."
                 return []
             }
             struct ServerDetectResponse: Decodable {
@@ -589,7 +589,7 @@ final class AdStore {
             return sorted
         } catch {
             lastServerTimedOut = (error as? URLError)?.code == .timedOut
-            lastDetectionError = "4070 Super analysis failed: \(error.localizedDescription)"
+            lastDetectionError = "quarto-backend analysis failed: \(error.localizedDescription)"
             Task { await LogSink.shared.log(level: "error", tag: "detectOnServer", message: error.localizedDescription, meta: ["episode_id": episode.id]) }
             return []
         }
@@ -711,7 +711,7 @@ final class AdStore {
     ) async {
         isScanning = true
         currentScanTitle = episode.title ?? "Episode"
-        scanStatusMessage = "Analyzing on 4070 Super GPU..."
+        scanStatusMessage = "Analyzing on quarto-backend GPU..."
         defer {
             if !isBatchScanning {
                 isScanning = false

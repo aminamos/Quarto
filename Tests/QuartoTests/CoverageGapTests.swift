@@ -257,10 +257,10 @@ struct ServerWaitTests {
         let saved = store.serverDetectionURL
         defer { store.serverDetectionURL = saved }
         store.serverDetectionURL = "http://127.0.0.1:9"
-        #expect(await store.isWorkerReachable() == false)
+        #expect(await store.isBackendReachable() == false)
     }
 
-    @Test @MainActor func liveWorkerAnswersPlansShape() async {
+    @Test @MainActor func liveBackendAnswersPlansShape() async {
         // Requires a live detector worker; set QUARTO_LIVE_WORKER_URL to run.
         guard let liveURL = ProcessInfo.processInfo.environment["QUARTO_LIVE_WORKER_URL"],
               !liveURL.isEmpty else { return }
@@ -268,7 +268,7 @@ struct ServerWaitTests {
         let saved = store.serverDetectionURL
         defer { store.serverDetectionURL = saved }
         store.serverDetectionURL = liveURL
-        #expect(await store.isWorkerReachable() == true)
+        #expect(await store.isBackendReachable() == true)
     }
 }
 

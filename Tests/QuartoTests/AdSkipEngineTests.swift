@@ -321,11 +321,11 @@ final class KnownAdEpisodePhoneTests: XCTestCase {
             runLocal: false
         )
 
-        let serverCuts = store.serverSegments(for: knownEpisode.id, title: knownEpisode.title)
+        let serverBreaks = store.serverSegments(for: knownEpisode.id, title: knownEpisode.title)
         XCTAssertGreaterThanOrEqual(
-            serverCuts.count,
+            serverBreaks.count,
             2,
-            "Compare Both returned \(serverCuts.count) desktop breaks for known ad-heavy episode; expected several"
+            "Compare Both returned \(serverBreaks.count) desktop breaks for known ad-heavy episode; expected several"
         )
     }
 }

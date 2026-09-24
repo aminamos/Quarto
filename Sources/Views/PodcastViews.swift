@@ -849,8 +849,8 @@ struct EpisodeDetailView: View {
     }
 
     enum AdsViewMode: String, CaseIterable, Identifiable {
-        case active = "Active Cuts"
-        case compare = "Compare (Server vs Local)"
+        case active = "Active Breaks"
+        case compare = "Compare (Backend vs Device)"
         var id: String { rawValue }
     }
     var body: some View {
@@ -962,9 +962,9 @@ struct EpisodeDetailView: View {
                     CircleIconButton(systemName: "text.badge.plus") {}
                 }
                 let ads = model.adStore.segments(for: episode.id, title: episode.title)
-                let serverCuts = model.adStore.serverSegments(for: episode.id, title: episode.title)
-                let localCuts = model.adStore.localSegments(for: episode.id)
-                let hasComparison = !serverCuts.isEmpty || !localCuts.isEmpty
+                let serverBreaks = model.adStore.serverSegments(for: episode.id, title: episode.title)
+                let localBreaks = model.adStore.localSegments(for: episode.id)
+                let hasComparison = !serverBreaks.isEmpty || !localBreaks.isEmpty
 
                 if model.adStore.isScanning && model.adStore.currentScanTitle == (episode.title ?? "Episode") {
                     HStack(spacing: 10) {
@@ -1022,7 +1022,7 @@ struct EpisodeDetailView: View {
                                     } else {
                                         Image(systemName: "desktopcomputer")
                                     }
-                                    Text("4070 Super")
+                                    Text("Backend")
                                 }
                                 .font(.caption.weight(.semibold))
                                 .padding(.horizontal, 12)
@@ -1121,7 +1121,7 @@ struct EpisodeDetailView: View {
                         }
 
                         if adsViewMode == .compare && hasComparison {
-                            comparisonView(serverCuts: serverCuts, localCuts: localCuts)
+                            comparisonView(serverBreaks: serverBreaks, localBreaks: localBreaks)
                         } else if ads.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "shield.slash")
@@ -1130,7 +1130,7 @@ struct EpisodeDetailView: View {
                                 Text("No Ad Breaks Detected")
                                     .font(.headline)
                                     .foregroundStyle(.white)
-                                Text("Choose '4070 Super' for high-speed GPU analysis or 'Device' for on-device recognition.")
+                                Text("Choose 'Backend' to run detection on quarto-backend over the RTX 4070 Super, or 'Device' for on-device recognition.")
                                     .font(.footnote)
                                     .foregroundStyle(QuartoTheme.muted)
                                     .multilineTextAlignment(.center)
@@ -1171,7 +1171,7 @@ struct EpisodeDetailView: View {
         }
     }
     @ViewBuilder
-    private func comparisonView(serverCuts: [AdSegment], localCuts: [AdSegment]) -> some View {
+    private func comparisonView(serverBreaks: [AdSegment], localBreaks: [AdSegment]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             // Summary Card
             VStack(alignment: .leading, spacing: 10) {
@@ -1183,14 +1183,14 @@ struct EpisodeDetailView: View {
                     Image(systemName: "arrow.left.and.right")
                         .foregroundStyle(.orange)
                 }
-                let serverTotal = serverCuts.reduce(0.0) { $0 + ($1.endTime - $1.startTime) }
-                let localTotal = localCuts.reduce(0.0) { $0 + ($1.endTime - $1.startTime) }
+                let serverTotal = serverBreaks.reduce(0.0) { $0 + ($1.endTime - $1.startTime) }
+                let localTotal = localBreaks.reduce(0.0) { $0 + ($1.endTime - $1.startTime) }
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("4070 Super")
+                        Text("Backend")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.blue)
-                        Text("\(serverCuts.count) breaks (\(Format.durationPrecise(serverTotal)))")
+                        Text("\(serverBreaks.count) breaks (\(Format.durationPrecise(serverTotal)))")
                             .font(.subheadline)
                             .foregroundStyle(.white)
                     }
@@ -1199,7 +1199,7 @@ struct EpisodeDetailView: View {
                         Text("Device")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.purple)
-                        Text("\(localCuts.count) breaks (\(Format.durationPrecise(localTotal)))")
+                        Text("\(localBreaks.count) breaks (\(Format.durationPrecise(localTotal)))")
                             .font(.subheadline)
                             .foregroundStyle(.white)
                     }
@@ -1207,9 +1207,9 @@ struct EpisodeDetailView: View {
                 Divider().overlay(Color.white.opacity(0.1))
                 HStack(spacing: 12) {
                     Button {
-                        model.adStore.applyCuts(from: .server, for: episode.id)
+                        model.adStore.applyDetections(from: .server, for: episode.id)
                     } label: {
-                        Text("Use Server Cuts")
+                        Text("Use Backend Breaks")
                             .font(.caption.weight(.bold))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -1217,9 +1217,9 @@ struct EpisodeDetailView: View {
                             .foregroundStyle(.white)
                     }
                     Button {
-                        model.adStore.applyCuts(from: .local, for: episode.id)
+                        model.adStore.applyDetections(from: .local, for: episode.id)
                     } label: {
-                        Text("Use Device Cuts")
+                        Text("Use Device Breaks")
                             .font(.caption.weight(.bold))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -1231,12 +1231,12 @@ struct EpisodeDetailView: View {
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.12)))
 
-            // Server Cuts Breakdown
-            Text("Desktop Server (RTX 4070 Super)")
+            // Backend Breaks Breakdown
+            Text("quarto-backend (RTX 4070 Super)")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.blue)
                 .padding(.top, 6)
-            ForEach(Array(serverCuts.enumerated()), id: \.element.id) { index, ad in
+            ForEach(Array(serverBreaks.enumerated()), id: \.element.id) { index, ad in
                 AdSegmentCard(
                     segment: ad,
                     index: index + 1,
@@ -1246,12 +1246,12 @@ struct EpisodeDetailView: View {
                 )
             }
 
-            // Device Cuts Breakdown
+            // Device Breaks Breakdown
             Text("Local Device (Apple Speech)")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.purple)
                 .padding(.top, 10)
-            ForEach(Array(localCuts.enumerated()), id: \.element.id) { index, ad in
+            ForEach(Array(localBreaks.enumerated()), id: \.element.id) { index, ad in
                 AdSegmentCard(
                     segment: ad,
                     index: index + 1,
@@ -1303,7 +1303,7 @@ struct AdTipSheet: View {
                     } label: {
                         HStack {
                             Image(systemName: "arrow.up.circle.fill")
-                            Text("Save & Sync with 4070 Super")
+                            Text("Save & Sync with Backend")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)

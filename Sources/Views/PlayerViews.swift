@@ -402,10 +402,10 @@ struct SettingsView: View {
                     Text(model.player.autoSkipAds ? "Ads skip automatically during playback." : "Ads will show an orange 'Skip Sponsor Break' button without jumping automatically.")
                         .font(.footnote)
                         .foregroundStyle(QuartoTheme.muted)
-                    Toggle("Detect on Server (RTX 4070 Super)", isOn: Bindable(model.adStore).useServerDetection)
+                    Toggle("Detect on Backend (RTX 4070 Super)", isOn: Bindable(model.adStore).useServerDetection)
                     if model.adStore.useServerDetection {
                         HStack {
-                            Text("Worker URL")
+                            Text("Backend URL")
                             Spacer()
                             TextField("URL", text: Bindable(model.adStore).serverDetectionURL)
                                 .multilineTextAlignment(.trailing)
@@ -425,10 +425,10 @@ struct SettingsView: View {
                             if model.adStore.isSyncing {
                                 ProgressView().tint(.orange)
                                     .padding(.trailing, 4)
-                                Text("Syncing from 4070 Super...")
+                                Text("Syncing from Backend...")
                             } else {
                                 Image(systemName: "arrow.triangle.2.circlepath")
-                                Text("Sync All Plans from 4070 Super")
+                                Text("Sync All Plans from Backend")
                             }
                         }
                     }
@@ -444,7 +444,7 @@ struct SettingsView: View {
                         }
                     }
                     LabeledContent("Desktop Plans Cached", value: "\(model.adStore.titlePlans.count) episodes")
-                    Text("Offloads full-episode transcription to your local NVIDIA Parakeet GPU worker with automatic fallback to on-device recognition.")
+                    Text("Runs detection on quarto-backend (RTX 4070 Super) with automatic fallback to on-device recognition. The backend only detects breaks and returns their timestamps - nothing is re-encoded; Quarto skips the breaks during playback on this device.")
                         .font(.footnote)
                         .foregroundStyle(QuartoTheme.muted)
                 }
@@ -510,7 +510,7 @@ struct SettingsView: View {
                     Button("Clear Local Ad Cache") {
                         model.adStore.clearLocalCache()
                     }
-                    Button("Clear Remote 4070 Super Cache") {
+                    Button("Clear Backend Cache") {
                         Task { await model.adStore.clearServerCache() }
                     }
                     Button("Clear All Caches (Local & Remote)", role: .destructive) {
