@@ -179,6 +179,20 @@ jobs:
           -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
           -allowProvisioningUpdates
 
+      - name: Dump export diagnostics
+        if: failure()
+        run: |
+          logs="$(find /var/folders "$RUNNER_TEMP" -maxdepth 5 -name 'Quarto_*.xcdistributionlogs' -type d 2>/dev/null | tail -1)"
+          if [ -z "$logs" ]; then
+            echo "No xcdistributionlogs bundle found."
+            exit 0
+          fi
+          echo "Distribution log bundle: $logs"
+          find "$logs" -type f -print | while read -r f; do
+            echo "------------ $f ------------"
+            cat "$f"
+          done
+
       - name: Verify the IPA
         run: |
           test -f "$RUNNER_TEMP/export/Quarto.ipa" || {
