@@ -166,4 +166,19 @@ jobs:
           api-private-key: ${{ secrets.ASC_KEY_P8 }}
           release-notes: ${{ inputs.release_notes }}
           uses-non-exempt-encryption: 'false'
-          wait-for-processing: 'true'
+          # The action's own wait queries the API with a key Apple refuses (401);
+          # scripts/wait_for_testflight.py does it with the same credentials that
+          # xcodebuild and altool accept.
+          wait-for-processing: 'false'
+
+      - name: Wait for Apple to process the build
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY="$RUNNER_TEMP/asc/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          python3 scripts/wait_for_testflight.py \
+            --build "${{ github.run_number }}" \
+            --key-path "$KEY" \
+            --key-id "${{ secrets.ASC_KEY_ID }}" \
+            --issuer "${{ secrets.ASC_ISSUER_ID }}" \
+            --timeout 1500
