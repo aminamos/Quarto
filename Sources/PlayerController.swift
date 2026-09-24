@@ -529,22 +529,45 @@ final class PlayerController {
                 }
             }
 
-            await MainActor.run {
-                self?.currentTempAudioFile = tempToClean
-            }
+            await self?.setCurrentTempAudioFile(tempToClean)
             _ = await self?.fileRecognizer.transcribeFile(url: targetFile) { [weak self] word, start, end in
                 self?.feedDetectedWord(word, startTime: start, endTime: end)
             }
 
             if let temp = tempToClean {
                 try? FileManager.default.removeItem(at: temp)
-                await MainActor.run {
-                    if self?.currentTempAudioFile == temp {
-                        self?.currentTempAudioFile = nil
-                    }
-                }
+                await self?.clearCurrentTempAudioFileIfMatches(temp)
             }
         }
+    }
+
+    // MARK: - MainActor state helpers for detached scan tasks
+    // Called as `await self?.helper(...)` from Task.detached bodies: referencing
+    // self inside a MainActor.run closure nested in a detached task trips Swift 6's
+    // "sending 'self' risks causing data races" error, while direct awaited calls
+    // to MainActor-isolated methods compile cleanly.
+
+    private func setCurrentTempAudioFile(_ url: URL?) {
+        currentTempAudioFile = url
+    }
+
+    private func clearCurrentTempAudioFileIfMatches(_ url: URL) {
+        if currentTempAudioFile == url {
+            currentTempAudioFile = nil
+        }
+    }
+
+    private func setScanningSilence(_ value: Bool) {
+        isScanningSilence = value
+    }
+
+    private func finishSilenceScan(segments: [SilenceSegment], key: String, generation: Int, audioURL: URL) {
+        silenceStore?.save(segments, for: key)
+        guard silenceScanGeneration == generation else { return }
+        if skipSilence, currentSilenceKey == key, currentAudioURL == audioURL {
+            silenceSegments = segments
+        }
+        isScanningSilence = false
     }
 
     private func startSilenceScan(audioURL: URL, isLocal: Bool, key: String) {
@@ -573,23 +596,13 @@ final class PlayerController {
                 }
             }
 
-            await MainActor.run {
-                self?.isScanningSilence = true
-            }
+            await self?.setScanningSilence(true)
             let segments = (try? await SilenceDetector.analyze(url: targetFile)) ?? []
             if let temp = tempToClean {
                 try? FileManager.default.removeItem(at: temp)
             }
 
-            await MainActor.run {
-                guard let self else { return }
-                self.silenceStore?.save(segments, for: key)
-                guard self.silenceScanGeneration == generation else { return }
-                if self.skipSilence, self.currentSilenceKey == key, self.currentAudioURL == audioURL {
-                    self.silenceSegments = segments
-                }
-                self.isScanningSilence = false
-            }
+            await self?.finishSilenceScan(segments: segments, key: key, generation: generation, audioURL: audioURL)
         }
     }
 
