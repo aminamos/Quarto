@@ -5,17 +5,8 @@
 #
 # One-time setup (5 minutes, all in a browser):
 #   1. App Store Connect > Users and Access > Integrations > App Store Connect API
-#      > Team Keys > "+" — name it "Quarto CI" and give it the **Admin** role.
+#      > Team Keys > "+" — name it "Quarto CI", access "App Manager".
 #      Download the .p8 (shown ONCE) and note the Key ID + Issuer ID.
-#      Admin is required for the distribution half of the build: "Export IPA"
-#      needs an Apple Distribution certificate plus an App Store provisioning
-#      profile for codes.amos.quarto, and only the Admin role carries
-#      Certificates, Identifiers & Profiles access. App Manager / Developer keys
-#      can mint development assets (that is how the archive gets signed) but the
-#      export then stops with `error: exportArchive Cloud signing permission
-#      error` / `No profiles for 'codes.amos.quarto' were found`.
-#      An API key's access level can't be edited after creation, so revoke the
-#      old key and generate a new one with the Admin role.
 #   2. Make sure the app record exists: App Store Connect > My Apps > Quarto
 #      (bundle ID codes.amos.quarto). If missing: "+" > New App > iOS.
 #   3. GitHub repo > Settings > Secrets and variables > Actions > New repository secret:
@@ -23,12 +14,6 @@
 #        ASC_ISSUER_ID  = Issuer ID from step 1
 #        ASC_KEY_P8     = full contents of the .p8 file (-----BEGIN/END----- lines included)
 #   4. Push this file. Done — no Xcode needed ever again for a build.
-#
-# Alternative if the key must stay App Manager: sign manually. Create the Apple
-# Distribution certificate and the App Store profile by hand, export the .p12
-# and the .mobileprovision, store them as repository secrets, import them into a
-# temporary keychain below, and set `signingStyle` to `manual` (with
-# `provisioningProfiles`) in exportOptions.plist.
 #
 # How it works: xcodegen regenerates the project from project.yml, xcodebuild
 # archives with automatic signing (authenticating to Apple with the API key),
@@ -45,10 +30,6 @@ on:
         description: "Tester notes for this build (shown in TestFlight)"
         required: false
         default: ""
-
-concurrency:
-  group: testflight
-  cancel-in-progress: false
 
 jobs:
   unit-tests:
@@ -127,22 +108,6 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
-      - name: Check App Store Connect credentials
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          missing=""
-          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
-          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
-          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing repository secret(s):$missing — add them under Settings > Secrets and variables > Actions."
-            exit 1
-          fi
-          echo "ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 are present."
-
       - name: Stage App Store Connect API key
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
@@ -165,7 +130,6 @@ jobs:
           -authenticationKeyID "${{ secrets.ASC_KEY_ID }}"
           -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
           -allowProvisioningUpdates
-          CODE_SIGN_STYLE=Automatic
           CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
       - name: Export IPA
@@ -178,28 +142,6 @@ jobs:
           -authenticationKeyID "${{ secrets.ASC_KEY_ID }}"
           -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
           -allowProvisioningUpdates
-
-      - name: Dump export diagnostics
-        if: failure()
-        run: |
-          logs="$(find /var/folders "$RUNNER_TEMP" -maxdepth 5 -name 'Quarto_*.xcdistributionlogs' -type d 2>/dev/null | tail -1)"
-          if [ -z "$logs" ]; then
-            echo "No xcdistributionlogs bundle found."
-            exit 0
-          fi
-          echo "Distribution log bundle: $logs"
-          find "$logs" -type f -print | while read -r f; do
-            echo "------------ $f ------------"
-            cat "$f"
-          done
-
-      - name: Verify the IPA
-        run: |
-          test -f "$RUNNER_TEMP/export/Quarto.ipa" || {
-            echo "::error::export finished without producing Quarto.ipa"
-            exit 1
-          }
-          ls -l "$RUNNER_TEMP/export"
 
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v5

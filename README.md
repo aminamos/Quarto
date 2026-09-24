@@ -19,17 +19,22 @@ A GitHub Actions workflow builds and uploads to TestFlight — trigger it from
 anywhere: GitHub.com > aminamos/Quarto > Actions > "TestFlight" > Run workflow
 (the GitHub mobile app works too).
 
-One-time setup: create an App Store Connect API team key at App Store Connect >
-Users and Access > Integrations and give it the **Admin** role. App Manager and
-Developer keys cannot create the Apple Distribution certificate and the App Store
-provisioning profile that the "Export IPA" step needs, so the build stops there
-with `Cloud signing permission error` / `No profiles for 'codes.amos.quarto'
-were found`. An API key's access level can't be edited after creation, so revoke
-the old key and generate a new Admin one. Then add three repo secrets
-(`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` = the .p8 contents) and push
-`.github/workflows/testflight.yml`. Full steps — including the manual-signing
-alternative for accounts that can't hand out an Admin key — are in the workflow
-file header.
+Setup: add three repo secrets (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` = the
+.p8 contents of an App Store Connect API team key) and push
+`.github/workflows/testflight.yml`. Full steps are in the workflow file header.
+
+Known gap (2026-09-24): the pipeline runs unit tests, archives and signs the app,
+but "Export IPA" stops with `error: exportArchive Cloud signing permission error`
+followed by `error: exportArchive No profiles for 'codes.amos.quarto' were
+found`. The archive is signed with a development identity (`Apple Development:
+Created via API`), and the export then needs an Apple Distribution certificate
+plus an App Store provisioning profile that the account's API key cannot create:
+only the Admin role carries Certificates, Identifiers & Profiles access in App
+Store Connect, an API key's access level cannot be edited after creation, and an
+App Manager key can be upgraded only by revoking it and generating a new one.
+The alternative is manual signing with a distribution `.p12` and
+`.mobileprovision` stored as secrets. Everything else in the build is green; this
+is an owner-side Apple permission issue, not a repository defect.
 
 ## Build
 
