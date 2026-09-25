@@ -75,7 +75,7 @@ final class AdStore {
     private static let detectorURLKey = "quarto_server_detector_url"
 
     /// Stored so @Observable tracks it and SwiftUI refreshes the TextField.
-    var serverDetectionURL: String = Self.defaultDetectorURL {
+    var serverDetectionURL: String = AdStore.defaultDetectorURL {
         didSet { UserDefaults.standard.set(serverDetectionURL, forKey: Self.detectorURLKey) }
     }
 
