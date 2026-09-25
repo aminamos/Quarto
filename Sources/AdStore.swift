@@ -67,9 +67,21 @@ final class AdStore {
         let count: Int
         let plans: [DesktopPlanItem]
     }
-    
+
     var scanStatusMessage = "Analyzing audio for ads..."
     private var scanTask: Task<Void, Never>?
+
+    private static let defaultDetectorURL = "https://quarto-ad-sync.a-8c6.workers.dev"
+    private static let detectorURLKey = "quarto_server_detector_url"
+
+    /// Stored so @Observable tracks it and SwiftUI refreshes the TextField.
+    var serverDetectionURL: String = Self.defaultDetectorURL {
+        didSet { UserDefaults.standard.set(serverDetectionURL, forKey: Self.detectorURLKey) }
+    }
+
+    var useServerDetection: Bool = true {
+        didSet { UserDefaults.standard.set(useServerDetection, forKey: "quarto_detect_on_server") }
+    }
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -81,28 +93,24 @@ final class AdStore {
         tipsURL = base.appendingPathComponent("ad_tips.json")
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         load()
+
+        // Hydrate stored properties from UserDefaults.
+        if let saved = UserDefaults.standard.object(forKey: "quarto_detect_on_server") as? Bool {
+            useServerDetection = saved
+        }
+
+        // Migrate any stale LAN/VPN IP URL to the Cloudflare Worker.
+        let stored = UserDefaults.standard.string(forKey: Self.detectorURLKey) ?? ""
+        if !stored.isEmpty && !stored.contains("100.") && !stored.contains(":5055") {
+            serverDetectionURL = stored
+        } else {
+            serverDetectionURL = Self.defaultDetectorURL
+            UserDefaults.standard.set(Self.defaultDetectorURL, forKey: Self.detectorURLKey)
+        }
+
         Task { [weak self] in
             await self?.syncAllPlansFromDesktop()
         }
-    }
-
-    var useServerDetection: Bool {
-        get { UserDefaults.standard.object(forKey: "quarto_detect_on_server") as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: "quarto_detect_on_server") }
-    }
-
-    var serverDetectionURL: String {
-        get {
-            let defaultURL = "https://quarto-ad-sync.a-8c6.workers.dev"
-            if let val = UserDefaults.standard.string(forKey: "quarto_server_detector_url"),
-               !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               !val.contains("100.121.101.70") {
-                return val
-            }
-            UserDefaults.standard.set(defaultURL, forKey: "quarto_server_detector_url")
-            return defaultURL
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "quarto_server_detector_url") }
     }
 
     var useLogSink: Bool {

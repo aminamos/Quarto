@@ -78,7 +78,7 @@ untouched — nothing is re-encoded and library files are never rewritten. Quart
 skips the breaks at playback time, on the device, and the Skipped/Breaks panel in
 the player is what you tune.
 
-Default backend URL: `http://100.121.101.70:5055`, editable under
+Default backend URL: `https://quarto-ad-sync.a-8c6.workers.dev`, editable under
 Settings > Sponsor & Ad Detection > Backend URL.
 
 The backend's `ad_server.py` serves:
