@@ -81,6 +81,9 @@ final class AdStore {
         tipsURL = base.appendingPathComponent("ad_tips.json")
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         load()
+        Task { [weak self] in
+            await self?.syncAllPlansFromDesktop()
+        }
     }
 
     var useServerDetection: Bool {
@@ -90,11 +93,12 @@ final class AdStore {
 
     var serverDetectionURL: String {
         get {
+            let defaultURL = "https://quarto-ad-sync.a-8c6.workers.dev"
             if let val = UserDefaults.standard.string(forKey: "quarto_server_detector_url"),
-               !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+               !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !val.contains("100.121.101.70") {
                 return val
             }
-            let defaultURL = "http://100.121.101.70:5055"
             UserDefaults.standard.set(defaultURL, forKey: "quarto_server_detector_url")
             return defaultURL
         }
