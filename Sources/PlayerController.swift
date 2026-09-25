@@ -22,7 +22,7 @@ final class PlayerController {
     var autoSkipAds = true {
         didSet {
             UserDefaults.standard.set(autoSkipAds, forKey: "quarto_auto_skip_ads")
-            if autoSkipAds && isPlaying {
+            if autoSkipAds && isPlaying && episodeId != nil {
                 startLiveSpeechRecognition()
                 if let url = currentAudioURL, detectedAdSegments.isEmpty {
                     startAdScan(audioURL: url, isLocal: false)
@@ -121,9 +121,9 @@ final class PlayerController {
 
         #if !os(macOS)
         try? AVAudioSession.sharedInstance().setCategory(
-            .playAndRecord,
+            .playback,
             mode: .spokenAudio,
-            options: [.defaultToSpeaker, .allowBluetoothHFP, .allowAirPlay]
+            options: []
         )
         try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
         #endif
@@ -217,10 +217,11 @@ final class PlayerController {
         updateNowPlaying()
         remoteCommands()
 
-        startLiveSpeechRecognition()
-        currentAudioURL = url
-        if autoSkipAds && detectedAdSegments.isEmpty {
-            startAdScan(audioURL: url, isLocal: localFile != nil)
+        if episodeId != nil {
+            startLiveSpeechRecognition()
+            if autoSkipAds && detectedAdSegments.isEmpty {
+                startAdScan(audioURL: url, isLocal: localFile != nil)
+            }
         }
         if skipSilence && silenceSegments.isEmpty, let key = currentSilenceKey {
             startSilenceScan(audioURL: url, isLocal: localFile != nil, key: key)
@@ -239,7 +240,9 @@ final class PlayerController {
             lastPlaybackTime = nil
             player.playImmediately(atRate: rate)
             isPlaying = true
-            startLiveSpeechRecognition()
+            if episodeId != nil {
+                startLiveSpeechRecognition()
+            }
         }
         updateNowPlaying()
     }
@@ -607,7 +610,7 @@ final class PlayerController {
     }
 
     private func startLiveSpeechRecognition() {
-        guard autoSkipAds else { return }
+        guard episodeId != nil, autoSkipAds else { return }
         Task {
             _ = await recognizer.requestAuthorization()
             guard self.isPlaying && self.autoSkipAds else { return }
