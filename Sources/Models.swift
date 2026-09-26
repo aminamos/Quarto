@@ -118,6 +118,24 @@ struct LibraryItem: Codable, Identifiable, Hashable {
     let addedAt: Double? = nil
     let updatedAt: Double? = nil
 
+    init(
+        id: String,
+        libraryId: String?,
+        mediaType: String?,
+        media: Media?,
+        recentEpisode: PodcastEpisode?,
+        addedAt: Double? = nil,
+        updatedAt: Double? = nil
+    ) {
+        self.id = id
+        self.libraryId = libraryId
+        self.mediaType = mediaType
+        self.media = media
+        self.recentEpisode = recentEpisode
+        self.addedAt = addedAt
+        self.updatedAt = updatedAt
+    }
+
     var title: String { media?.metadata.title ?? "Untitled" }
     var author: String {
         media?.metadata.authorName

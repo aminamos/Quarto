@@ -9,7 +9,9 @@ private struct CachedPodcastContent: Codable {
     let progress: [MediaProgress]
 }
 
-final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+// Callbacks are serialized on the session's delegate queue; `continuation` is
+// installed before the task resumes, so cross-queue access is safe.
+final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let key: String
     weak var model: AppModel?
     var continuation: CheckedContinuation<(URL, URLResponse), Error>?
