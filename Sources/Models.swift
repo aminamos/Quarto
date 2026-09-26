@@ -115,6 +115,8 @@ struct LibraryItem: Codable, Identifiable, Hashable {
     let mediaType: String?
     let media: Media?
     let recentEpisode: PodcastEpisode?
+    let addedAt: Double? = nil
+    let updatedAt: Double? = nil
 
     var title: String { media?.metadata.title ?? "Untitled" }
     var author: String {
@@ -285,9 +287,133 @@ struct DownloadedFile: Codable, Hashable, Identifiable {
     var author: String
     var relativePath: String
     var duration: Double?
+    var downloadedAt: Double? = nil
 
     var key: String {
         if let episodeId { return "\(libraryItemId):\(episodeId)" }
         return libraryItemId
+    }
+}
+
+enum LibraryViewMode: String, CaseIterable, Identifiable {
+    case tiles
+    case list
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tiles: "Tiles"
+        case .list: "List"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .tiles: "square.grid.2x2"
+        case .list: "list.bullet"
+        }
+    }
+}
+
+enum LibrarySort: String, CaseIterable, Identifiable {
+    case title
+    case author
+    case lastListened
+    case dateAdded
+    case downloadDate
+    case duration
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .title: "Title"
+        case .author: "Author"
+        case .lastListened: "Last listened"
+        case .dateAdded: "Date added"
+        case .downloadDate: "Download date"
+        case .duration: "Duration"
+        }
+    }
+}
+
+enum LibrarySorting {
+    static func normalizedTimestamp(_ value: Double?) -> Double? {
+        guard let value else { return nil }
+        return value > 1_000_000_000_000 ? value / 1_000 : value
+    }
+
+    static func sorted(
+        _ items: [LibraryItem],
+        by sort: LibrarySort,
+        lastListened: (LibraryItem) -> Double?,
+        downloadedAt: (LibraryItem) -> Double?
+    ) -> [LibraryItem] {
+        switch sort {
+        case .title:
+            return items.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
+        case .author:
+            return items.sorted {
+                let comparison = $0.author.localizedCaseInsensitiveCompare($1.author)
+                if comparison == .orderedSame {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return comparison == .orderedAscending
+            }
+        case .lastListened:
+            return items.sorted {
+                dateDescending(
+                    normalizedTimestamp(lastListened($0)),
+                    normalizedTimestamp(lastListened($1)),
+                    tie: $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                )
+            }
+        case .dateAdded:
+            return items.sorted {
+                dateDescending(
+                    normalizedTimestamp($0.addedAt),
+                    normalizedTimestamp($1.addedAt),
+                    tie: $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                )
+            }
+        case .downloadDate:
+            return items.sorted {
+                dateDescending(
+                    normalizedTimestamp(downloadedAt($0)),
+                    normalizedTimestamp(downloadedAt($1)),
+                    tie: $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                )
+            }
+        case .duration:
+            return items.sorted {
+                let left = $0.duration ?? -1
+                let right = $1.duration ?? -1
+                if left == right {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return left > right
+            }
+        }
+    }
+
+    private static func dateDescending(
+        _ left: Double?,
+        _ right: Double?,
+        tie: Bool
+    ) -> Bool {
+        switch (left, right) {
+        case let (l?, r?):
+            if l == r { return tie }
+            return l > r
+        case (.some, .none):
+            return true
+        case (.none, .some):
+            return false
+        case (.none, .none):
+            return tie
+        }
     }
 }

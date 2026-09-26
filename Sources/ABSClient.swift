@@ -48,7 +48,11 @@ final class ABSClient {
     }
 
     func items(libraryId: String, limit: Int = 50, page: Int = 0, minified: Bool = true) async throws -> [LibraryItem] {
-        let response: LibraryItemsResponse = try await get(
+        try await itemsResponse(libraryId: libraryId, limit: limit, page: page, minified: minified).results
+    }
+
+    func itemsResponse(libraryId: String, limit: Int, page: Int, minified: Bool) async throws -> LibraryItemsResponse {
+        try await get(
             "/api/libraries/\(libraryId)/items",
             query: [
                 "limit": String(limit),
@@ -57,7 +61,29 @@ final class ABSClient {
                 "sort": "media.metadata.title"
             ]
         )
-        return response.results
+    }
+
+    func allItems(libraryId: String, pageSize: Int = 200, minified: Bool = true) async throws -> [LibraryItem] {
+        var all: [LibraryItem] = []
+        var page = 0
+        while true {
+            try Task.checkCancellation()
+            let response = try await itemsResponse(
+                libraryId: libraryId,
+                limit: pageSize,
+                page: page,
+                minified: minified
+            )
+            all.append(contentsOf: response.results)
+            if let total = response.total, all.count >= total {
+                break
+            }
+            if response.results.count < pageSize {
+                break
+            }
+            page += 1
+        }
+        return all
     }
 
     func personalized(libraryId: String) async throws -> [PersonalizedSection] {

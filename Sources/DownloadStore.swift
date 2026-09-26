@@ -79,7 +79,8 @@ final class DownloadStore {
             title: title,
             author: author,
             relativePath: name,
-            duration: duration
+            duration: duration,
+            downloadedAt: Date().timeIntervalSince1970
         )
         files.removeAll { $0.key == record.key }
         files.insert(record, at: 0)

@@ -9,6 +9,75 @@ private struct CachedPodcastContent: Codable {
     let progress: [MediaProgress]
 }
 
+final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+    let key: String
+    weak var model: AppModel?
+    var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+
+    init(key: String, model: AppModel) {
+        self.key = key
+        self.model = model
+        super.init()
+    }
+
+    static func fraction(written: Int64, expected: Int64) -> Double? {
+        guard expected > 0, written >= 0 else { return nil }
+        return min(1, max(0, Double(written) / Double(expected)))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let fraction = Self.fraction(
+            written: totalBytesWritten,
+            expected: totalBytesExpectedToWrite
+        )
+        Task { @MainActor [weak model] in
+            model?.setDownloadProgress(fraction, for: key)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard let continuation else { return }
+        self.continuation = nil
+        do {
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("quarto-dl-\(UUID().uuidString)")
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: location, to: destination)
+            continuation.resume(
+                returning: (destination, downloadTask.response ?? URLResponse())
+            )
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let continuation else { return }
+        self.continuation = nil
+        if let error {
+            continuation.resume(throwing: error)
+        } else {
+            continuation.resume(throwing: ABSError.badResponse)
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -25,7 +94,9 @@ final class AppModel {
     var showPlayer = false
     var searchText = ""
     var downloadingKey: String?
+    var downloadProgress: [String: Double] = [:]
     private(set) var pendingDownloadCount = 0
+    private var downloadDelegates: [String: DownloadProgressDelegate] = [:]
 
     private static let loggedOutKey = "has_logged_out"
 
@@ -166,7 +237,7 @@ final class AppModel {
         guard let client, let library = selectedLibrary else { return }
         player.configure(client: client)
         do {
-            let items = try await client.items(libraryId: library.id, limit: 100)
+            let items = try await client.allItems(libraryId: library.id)
             let sections = (try? await client.personalized(libraryId: library.id)) ?? []
             let episodes = library.isPodcast
                 ? try await client.recentEpisodes(libraryId: library.id)
@@ -371,6 +442,9 @@ final class AppModel {
                 preDetectedAds: preAds,
                 onProgressUpdate: { [weak self] cur, dur in
                     self?.recordProgress(itemId: item.id, episodeId: episode?.id, currentTime: cur, duration: dur)
+                },
+                onPlaybackFinished: { [weak self] in
+                    Task { await self?.refreshProgress() }
                 }
             )
         } catch {
@@ -388,19 +462,60 @@ final class AppModel {
         await play(item: stub, episode: episode)
     }
 
+    nonisolated static func downloadKey(itemId: String, episodeId: String?) -> String {
+        DownloadedFile(
+            libraryItemId: itemId,
+            episodeId: episodeId,
+            title: "",
+            author: "",
+            relativePath: "",
+            duration: nil
+        ).key
+    }
+
+    func downloadFraction(for key: String?) -> Double? {
+        guard let key else { return nil }
+        return downloadProgress[key]
+    }
+
+    func setDownloadProgress(_ fraction: Double?, for key: String) {
+        if let fraction {
+            downloadProgress[key] = fraction
+        } else {
+            downloadProgress.removeValue(forKey: key)
+        }
+    }
+
     func download(item: LibraryItem, episode: PodcastEpisode? = nil) async {
         guard let client else { return }
-        let key = DownloadedFile(libraryItemId: item.id, episodeId: episode?.id, title: "", author: "", relativePath: "", duration: nil).key
+        let key = Self.downloadKey(itemId: item.id, episodeId: episode?.id)
         downloadingKey = key
-        defer { downloadingKey = nil }
+        downloadProgress[key] = 0
+        defer {
+            downloadingKey = nil
+            downloadProgress.removeValue(forKey: key)
+            downloadDelegates.removeValue(forKey: key)
+        }
         do {
             let session = try await client.play(itemId: item.id, episodeId: episode?.id)
             guard let track = session.audioTracks.first, let url = client.absoluteURL(track.contentUrl) else {
                 throw ABSError.badURL
             }
             let request = client.authorizedRequest(for: url)
-            let (temp, response) = try await URLSession.shared.download(for: request)
+            let delegate = DownloadProgressDelegate(key: key, model: self)
+            downloadDelegates[key] = delegate
+            let urlSession = URLSession(
+                configuration: .default,
+                delegate: delegate,
+                delegateQueue: nil
+            )
+            defer { urlSession.finishTasksAndInvalidate() }
+            let (temp, response): (URL, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+                delegate.continuation = continuation
+                urlSession.downloadTask(with: request).resume()
+            }
             guard let http = response as? HTTPURLResponse else {
+                try? FileManager.default.removeItem(at: temp)
                 throw ABSError.badResponse
             }
             guard (200..<300).contains(http.statusCode) else {

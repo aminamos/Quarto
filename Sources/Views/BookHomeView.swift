@@ -101,6 +101,28 @@ struct ContinueCard: View {
     @Environment(AppModel.self) private var model
     let item: LibraryItem
 
+    private var isCurrent: Bool {
+        model.player.itemId == item.id
+            && model.player.episodeId == item.recentEpisode?.id
+    }
+
+    private var playTitle: String {
+        isCurrent ? (model.player.isPlaying ? "Pause" : "Resume") : "Play"
+    }
+
+    private var downloadKey: String {
+        AppModel.downloadKey(itemId: item.id, episodeId: item.recentEpisode?.id)
+    }
+
+    private var isDownloaded: Bool {
+        model.downloads.isDownloaded(
+            itemId: item.id,
+            episodeId: item.recentEpisode?.id
+        )
+    }
+
+    private var isDownloading: Bool { model.downloadingKey == downloadKey }
+
     var body: some View {
         Button {
             Task { await model.play(item: item, episode: item.recentEpisode) }
@@ -130,6 +152,38 @@ struct ContinueCard: View {
             .background(RoundedRectangle(cornerRadius: 18).fill(QuartoTheme.card))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                Task { await model.play(item: item, episode: item.recentEpisode) }
+            } label: {
+                Label(playTitle, systemImage: "play.fill")
+            }
+            if isDownloaded {
+                Button(role: .destructive) {
+                    model.downloads.remove(
+                        itemId: item.id,
+                        episodeId: item.recentEpisode?.id
+                    )
+                } label: {
+                    Label("Delete Download", systemImage: "trash")
+                }
+            } else if isDownloading {
+                Button("Downloading…") {}
+                    .disabled(true)
+            } else {
+                Button {
+                    Task {
+                        await model.download(
+                            item: item,
+                            episode: item.recentEpisode
+                        )
+                    }
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .disabled(model.downloadingKey != nil)
+            }
+        }
     }
 }
 
@@ -211,7 +265,7 @@ struct BrowseDestinationView: View {
                     .listStyle(.plain)
                 }
             case .library:
-                ItemGridView(items: model.libraryItems)
+                LibraryBrowseView(items: model.libraryItems)
             default:
                 ContentUnavailableView(title(route), systemImage: "hammer", description: Text("Not wired to the API yet."))
             }
@@ -275,28 +329,243 @@ struct BrowseDestinationView: View {
     }
 }
 
-struct ItemGridView: View {
+
+struct BookGridCell: View {
     @Environment(AppModel.self) private var model
-    let items: [LibraryItem]
+    let item: LibraryItem
+
+    private var downloadKey: String {
+        AppModel.downloadKey(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloaded: Bool {
+        model.downloads.isDownloaded(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloading: Bool { model.downloadingKey == downloadKey }
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 14)], spacing: 16) {
-                ForEach(items) { item in
-                    NavigationLink(value: item) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            CoverImage(url: model.coverURL(for: item.id), corner: 8)
-                                .aspectRatio(1, contentMode: .fit)
-                            Text(item.title)
-                                .font(.caption)
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                        }
+        NavigationLink(value: item) {
+            VStack(alignment: .leading, spacing: 8) {
+                CoverImage(url: model.coverURL(for: item.id), corner: 8)
+                    .aspectRatio(1, contentMode: .fit)
+                Text(item.title)
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+            }
+            .overlay(alignment: .topTrailing) {
+                if isDownloading {
+                    DownloadProgressRing(
+                        fraction: model.downloadFraction(for: downloadKey),
+                        size: 22
+                    )
+                    .padding(6)
+                    .background(Circle().fill(Color.black.opacity(0.6)))
+                    .padding(4)
+                } else if isDownloaded {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundStyle(.green)
+                        .padding(6)
+                        .background(Circle().fill(Color.black.opacity(0.6)))
+                        .padding(4)
+                }
+            }
+        }
+        .contextMenu {
+            BookItemContextMenu(item: item)
+        }
+    }
+}
+
+struct BookItemContextMenu: View {
+    @Environment(AppModel.self) private var model
+    let item: LibraryItem
+
+    private var downloadKey: String {
+        AppModel.downloadKey(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloaded: Bool {
+        model.downloads.isDownloaded(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloading: Bool { model.downloadingKey == downloadKey }
+
+    var body: some View {
+        Group {
+            Button {
+                Task { await model.play(item: item) }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+            if isDownloaded {
+                Button(role: .destructive) {
+                    model.downloads.remove(itemId: item.id, episodeId: nil)
+                } label: {
+                    Label("Delete Download", systemImage: "trash")
+                }
+            } else if isDownloading {
+                Button("Downloading…") {}
+                    .disabled(true)
+            } else {
+                Button {
+                    Task { await model.download(item: item) }
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .disabled(model.downloadingKey != nil)
+            }
+        }
+    }
+}
+
+struct BookListRow: View {
+    @Environment(AppModel.self) private var model
+    let item: LibraryItem
+
+    private var downloadKey: String {
+        AppModel.downloadKey(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloaded: Bool {
+        model.downloads.isDownloaded(itemId: item.id, episodeId: nil)
+    }
+
+    private var isDownloading: Bool { model.downloadingKey == downloadKey }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CoverImage(url: model.coverURL(for: item.id), corner: 8)
+                .frame(width: 48, height: 48)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                if !item.author.isEmpty {
+                    Text(item.author)
+                        .font(.caption)
+                        .foregroundStyle(QuartoTheme.muted)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    if isDownloading {
+                        DownloadProgressRing(
+                            fraction: model.downloadFraction(for: downloadKey),
+                            size: 16,
+                            lineWidth: 2
+                        )
+                    } else if isDownloaded {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                    if let progress = model.progress(
+                        for: item.id,
+                        episodeId: nil
+                    ) {
+                        Text(progress.remainingText)
+                            .font(.caption2)
+                            .foregroundStyle(QuartoTheme.muted)
+                    } else if let duration = item.duration {
+                        Text(Format.duration(duration))
+                            .font(.caption2)
+                            .foregroundStyle(QuartoTheme.muted)
                     }
                 }
             }
-            .padding()
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+struct LibraryBrowseView: View {
+    @Environment(AppModel.self) private var model
+    let items: [LibraryItem]
+    @AppStorage("quarto.libraryViewMode") private var viewModeRaw = LibraryViewMode.tiles.rawValue
+    @AppStorage("quarto.librarySort") private var sortRaw = LibrarySort.title.rawValue
+
+    private var viewMode: LibraryViewMode {
+        LibraryViewMode(rawValue: viewModeRaw) ?? .tiles
+    }
+
+    private var sort: LibrarySort {
+        LibrarySort(rawValue: sortRaw) ?? .title
+    }
+
+    private var sortedItems: [LibraryItem] {
+        LibrarySorting.sorted(
+            items,
+            by: sort,
+            lastListened: { model.progress(for: $0.id, episodeId: nil)?.lastUpdate },
+            downloadedAt: {
+                model.downloads.file(itemId: $0.id, episodeId: nil)?.downloadedAt
+            }
+        )
+    }
+
+    var body: some View {
+        Group {
+            if sortedItems.isEmpty {
+                if model.isLoading {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                } else {
+                    ContentUnavailableView(
+                        "No Books",
+                        systemImage: "books.vertical",
+                        description: Text("No audiobooks found in this library.")
+                    )
+                }
+            } else if viewMode == .tiles {
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 110), spacing: 14)],
+                        spacing: 16
+                    ) {
+                        ForEach(sortedItems) { item in
+                            BookGridCell(item: item)
+                        }
+                    }
+                    .padding()
+                }
+            } else {
+                List(sortedItems) { item in
+                    NavigationLink(value: item) {
+                        BookListRow(item: item)
+                    }
+                    .listRowBackground(QuartoTheme.bg)
+                    .contextMenu {
+                        BookItemContextMenu(item: item)
+                    }
+                }
+                .listStyle(.plain)
+            }
         }
         .background(QuartoTheme.bg)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("View", selection: $viewModeRaw) {
+                        ForEach(LibraryViewMode.allCases) { mode in
+                            Label(mode.title, systemImage: mode.systemImage)
+                                .tag(mode.rawValue)
+                        }
+                    }
+                    Picker("Sort", selection: $sortRaw) {
+                        ForEach(LibrarySort.allCases) { sort in
+                            Text(sort.title)
+                                .tag(sort.rawValue)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+            }
+        }
     }
 }

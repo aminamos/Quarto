@@ -147,8 +147,9 @@ struct PodcastHomeView: View {
 
     private var downloadBanner: some View {
         HStack(spacing: 12) {
-            ProgressView()
-                .tint(.blue)
+            DownloadProgressRing(
+                fraction: model.downloadFraction(for: model.downloadingKey)
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text("Downloading Episodes")
                     .font(.caption.weight(.bold))
@@ -555,11 +556,11 @@ struct EpisodeDownloadStatus: View {
 
     var body: some View {
         if let itemId = episode.libraryItemId {
-            let key = "\(itemId):\(episode.id)"
+            let key = AppModel.downloadKey(itemId: itemId, episodeId: episode.id)
             if model.downloadingKey == key {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(.white)
+                DownloadProgressRing(
+                    fraction: model.downloadFraction(for: key)
+                )
             } else if model.downloads.isDownloaded(itemId: itemId, episodeId: episode.id) {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(.green)
@@ -785,20 +786,51 @@ struct ItemDetailView: View {
                         .font(.subheadline.weight(.semibold))
                     }
                     Menu {
-                        Button("Detect Ads in All Episodes") {
-                            if let eps = item?.media?.episodes, !eps.isEmpty {
-                                model.adStore.scanEpisodes(
-                                    eps,
-                                    client: model.client,
-                                    downloads: model.downloads,
-                                    adEngine: model.player.adEngine
-                                )
+                        if item?.mediaType == "podcast" {
+                            Button("Detect Ads in All Episodes") {
+                                if let eps = item?.media?.episodes, !eps.isEmpty {
+                                    model.adStore.scanEpisodes(
+                                        eps,
+                                        client: model.client,
+                                        downloads: model.downloads,
+                                        adEngine: model.player.adEngine
+                                    )
+                                }
                             }
-                        }
-                        Button("Fetch Episodes") {
-                            Task {
-                                await model.fetchEpisodes(itemId: itemId)
-                                await loadItem()
+                            Button("Fetch Episodes") {
+                                Task {
+                                    await model.fetchEpisodes(itemId: itemId)
+                                    await loadItem()
+                                }
+                            }
+                        } else if let book = item {
+                            let isCurrent = model.player.itemId == book.id
+                            Button(isCurrent ? (model.player.isPlaying ? "Pause" : "Resume") : "Play") {
+                                Task {
+                                    if model.player.itemId == book.id {
+                                        model.player.toggle()
+                                    } else {
+                                        await model.play(item: book)
+                                    }
+                                }
+                            }
+                            let key = AppModel.downloadKey(itemId: book.id, episodeId: nil)
+                            if model.downloads.isDownloaded(itemId: book.id, episodeId: nil) {
+                                Button(role: .destructive) {
+                                    model.downloads.remove(itemId: book.id, episodeId: nil)
+                                } label: {
+                                    Label("Delete Download", systemImage: "trash")
+                                }
+                            } else if model.downloadingKey == key {
+                                Button("Downloading…") {}
+                                    .disabled(true)
+                            } else {
+                                Button {
+                                    Task { await model.download(item: book) }
+                                } label: {
+                                    Label("Download", systemImage: "arrow.down.circle")
+                                }
+                                .disabled(model.downloadingKey != nil)
                             }
                         }
                     } label: {
@@ -906,7 +938,7 @@ struct EpisodeDetailView: View {
                             .background(Circle().fill(QuartoTheme.chip))
                     }
                     .buttonStyle(.plain)
-                    let downloadKey = episode.libraryItemId.map { "\($0):\(episode.id)" }
+                    let downloadKey = episode.libraryItemId.map { AppModel.downloadKey(itemId: $0, episodeId: episode.id) }
                     let isDownloaded = episode.libraryItemId.map { model.downloads.isDownloaded(itemId: $0, episodeId: episode.id) } ?? false
                     let isDownloading = downloadKey != nil && model.downloadingKey == downloadKey
                     let isDeleting = downloadKey != nil && deletingDownloadKey == downloadKey
@@ -945,10 +977,12 @@ struct EpisodeDetailView: View {
                             }
                         } label: {
                             if isDownloading {
-                                ProgressView()
-                                    .tint(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(Circle().fill(QuartoTheme.chip))
+                                DownloadProgressRing(
+                                    fraction: model.downloadFraction(for: downloadKey),
+                                    size: 22
+                                )
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(QuartoTheme.chip))
                             } else {
                                 Image(systemName: "arrow.down")
                                     .foregroundStyle(.white)

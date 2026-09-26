@@ -57,6 +57,7 @@ final class PlayerController {
     var onAdSkipped: ((AdSegment) -> Void)?
     var onSilenceSkipped: ((SilenceSegment) -> Void)?
     var onProgressUpdate: ((Double, Double) -> Void)?
+    var onPlaybackFinished: (() -> Void)?
     var silenceStore: SilenceStore?
     let adEngine = AdSkipEngine()
     let recognizer = LiveSpeechRecognizer()
@@ -108,10 +109,12 @@ final class PlayerController {
         chapters: [SessionChapter]? = nil,
         description: String? = nil,
         preDetectedAds: [AdSegment] = [],
-        onProgressUpdate: ((Double, Double) -> Void)? = nil
+        onProgressUpdate: ((Double, Double) -> Void)? = nil,
+        onPlaybackFinished: (() -> Void)? = nil
     ) async throws {
         self.client = client
         self.onProgressUpdate = onProgressUpdate
+        self.onPlaybackFinished = onPlaybackFinished
         await closeCurrent()
         playGeneration += 1
         let generation = playGeneration
@@ -210,6 +213,15 @@ final class PlayerController {
                 self?.isPlaying = false
                 self?.lastPlaybackTime = nil
                 self?.recognizer.stopListening()
+                if let self, self.duration > 0 {
+                    self.currentTime = self.duration
+                }
+                if let self {
+                    self.onProgressUpdate?(self.currentTime, self.duration)
+                    self.updateNowPlaying()
+                    await self.sync(force: true, close: true)
+                    self.onPlaybackFinished?()
+                }
             }
         }
         localPlayer.playImmediately(atRate: rate)
@@ -372,6 +384,7 @@ final class PlayerController {
         coverURL = nil
         currentAudioURL = nil
         onProgressUpdate = nil
+        onPlaybackFinished = nil
         detectedAdSegments = []
         activeAdSegment = nil
         lastSkippedAd = nil

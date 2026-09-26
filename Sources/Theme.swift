@@ -48,6 +48,36 @@ struct WhitePlayPill: View {
     }
 }
 
+struct DownloadProgressRing: View {
+    var fraction: Double?
+    var size: CGFloat = 20
+    var lineWidth: CGFloat = 3
+
+    var body: some View {
+        if let fraction {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.25), lineWidth: lineWidth)
+                Circle()
+                    .trim(from: 0, to: min(1, max(0, fraction)))
+                    .stroke(
+                        Color.white,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: size, height: size)
+            .accessibilityLabel("Download progress")
+            .accessibilityValue("\(Int((min(1, max(0, fraction)) * 100).rounded())) percent")
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .tint(.white)
+                .frame(width: size, height: size)
+        }
+    }
+}
+
 struct AdSegmentCard: View {
     let segment: AdSegment
     let index: Int

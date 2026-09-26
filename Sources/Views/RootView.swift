@@ -167,7 +167,7 @@ struct LoginView: View {
 
 struct MainShell: View {
     @Environment(AppModel.self) private var model
-
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         NavigationStack {
             Group {
@@ -200,6 +200,11 @@ struct MainShell: View {
         .sheet(isPresented: Bindable(model).showPlayer) {
             PlayerSheet()
                 .presentationDetents([.large])
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active {
+                Task { await model.refreshProgress() }
+            }
         }
     }
 }
