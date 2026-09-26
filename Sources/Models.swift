@@ -115,8 +115,8 @@ struct LibraryItem: Codable, Identifiable, Hashable {
     let mediaType: String?
     let media: Media?
     let recentEpisode: PodcastEpisode?
-    let addedAt: Double? = nil
-    let updatedAt: Double? = nil
+    let addedAt: Double?
+    let updatedAt: Double?
 
     init(
         id: String,
