@@ -31,25 +31,26 @@ targets:
         buildPhase: resources
         type: folder
         optional: true
-    preBuildScripts:
+    postBuildScripts:
       - name: Fix onnxruntime minimum OS version
         script: |
           # onnxruntime-libs 1.28.2 declares MinimumOSVersion 13.0 while its
           # binary requires 18.0 (Apple ITMS-90208 rejects the upload).
-          # Patch the SPM artifacts before Xcode embeds and signs them.
-          ARTIFACTS=$(cd "$BUILD_DIR/../../SourcePackages/artifacts" 2>/dev/null && pwd)
-          if [ -z "$ARTIFACTS" ]; then
-            echo "error: SourcePackages artifacts dir not found" >&2
-            exit 1
-          fi
-          COUNT=$(find "$ARTIFACTS" -path "*onnxruntime.framework/Info.plist" | wc -l | tr -d ' ')
+          # Patch the embedded copy, then re-sign (export re-signs again).
+          FW_DIR="$BUILT_PRODUCTS_DIR/$FRAMEWORKS_FOLDER_PATH"
+          COUNT=$(find "$FW_DIR" -maxdepth 2 -path "*onnxruntime.framework/Info.plist" | wc -l | tr -d ' ')
           if [ "$COUNT" -eq 0 ]; then
-            echo "error: no onnxruntime.framework Info.plist found under $ARTIFACTS" >&2
+            echo "error: no embedded onnxruntime.framework found in $FW_DIR" >&2
             exit 1
           fi
-          find "$ARTIFACTS" -path "*onnxruntime.framework/Info.plist" \
+          find "$FW_DIR" -maxdepth 2 -path "*onnxruntime.framework/Info.plist" \
             -exec /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 18.0" {} \;
-          echo "patched $COUNT onnxruntime Info.plist(s) to MinimumOSVersion 18.0"
+          IDENT="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+          for fw in "$FW_DIR"/onnxruntime.framework; do
+            [ -d "$fw" ] || continue
+            codesign --force --sign "$IDENT" "$fw"
+          done
+          echo "patched $COUNT embedded onnxruntime Info.plist(s) to MinimumOSVersion 18.0"
     dependencies:
       - framework: Frameworks/QuartoAdSkip.xcframework
         embed: false

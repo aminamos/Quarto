@@ -128,11 +128,11 @@ struct UltraAlignmentTests {
         )
         #expect(words.count == 2)
         #expect(words[0].text == "Hello")
-        #expect(words[0].startTime == 0.0)
-        #expect(words[0].endTime == 0.16)
+        #expect(abs(words[0].startTime - 0.0) < 0.0001)
+        #expect(abs(words[0].endTime - 0.16) < 0.0001)
         #expect(words[1].text == "world")
-        #expect(words[1].startTime == 0.16)
-        #expect(words[1].endTime == 0.40)
+        #expect(abs(words[1].startTime - 0.16) < 0.0001)
+        #expect(abs(words[1].endTime - 0.40) < 0.0001)
         // Vocab-file ▁ markers group identically.
         let alt = UltraTranscriber.align(
             tokens: ["▁Hel", "lo"],
@@ -140,7 +140,7 @@ struct UltraAlignmentTests {
             durations: [0.08, 0.08]
         )
         #expect(alt.map(\.text) == ["Hello"])
-        #expect(alt[0].startTime == 1.0)
+        #expect(abs(alt[0].startTime - 1.0) < 0.0001)
     }
 
     @Test func skipsSpecialTokensAndFallsBackWithoutDurations() {
@@ -150,9 +150,9 @@ struct UltraAlignmentTests {
             durations: []
         )
         #expect(words.map(\.text) == ["go", "now"])
-        #expect(words[0].startTime == 0.5)
+        #expect(abs(words[0].startTime - 0.5) < 0.0001)
         #expect(words[0].endTime > words[0].startTime)
-        #expect(words[1].startTime == 0.7)
+        #expect(abs(words[1].startTime - 0.7) < 0.0001)
     }
 
     @Test func emptyInputYieldsNoWords() {
