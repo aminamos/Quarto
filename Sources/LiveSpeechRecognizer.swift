@@ -3,7 +3,8 @@ import Foundation
 @preconcurrency import AVFoundation
 
 @MainActor
-public final class LiveSpeechRecognizer: ObservableObject {
+public final class LiveSpeechRecognizer: ObservableObject, WordRecognizer, Sendable {
+    public let engineName = "Apple Speech"
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -12,7 +13,7 @@ public final class LiveSpeechRecognizer: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var onWordDetected: (@MainActor (String, Double, Double) -> Void)?
     private var timeOffset: Double = 0
-    private(set) var isListening = false
+    public private(set) var isListening = false
 
     public init() {}
 

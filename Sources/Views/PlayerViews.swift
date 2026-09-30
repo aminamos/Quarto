@@ -416,6 +416,14 @@ struct SettingsView: View {
                                 .autocorrectionDisabled()
                         }
                     }
+                    Picker("On-Device Engine", selection: Bindable(model.adStore).onDeviceEngine) {
+                        ForEach(OnDeviceSpeechEngine.allCases) { engine in
+                            Text(engine.displayName).tag(engine)
+                        }
+                    }
+                    Text("Parakeet Ultra runs without Photon. Until its weights are downloaded, scans fall back to Apple Speech automatically.")
+                        .font(.footnote)
+                        .foregroundStyle(QuartoTheme.muted)
                     Button {
                         Task {
                             _ = await model.adStore.syncAllPlansFromDesktop()

@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Speech
 
 public enum TipType: String, Codable, CaseIterable, Identifiable, Sendable {
     case trigger = "Trigger (Ad Start)"
@@ -86,6 +85,11 @@ final class AdStore {
     var useServerDetection: Bool {
         get { UserDefaults.standard.object(forKey: "quarto_detect_on_server") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "quarto_detect_on_server") }
+    }
+
+    var onDeviceEngine: OnDeviceSpeechEngine {
+        get { OnDeviceSpeechEngine.stored }
+        set { OnDeviceSpeechEngine.stored = newValue }
     }
 
     var serverDetectionURL: String {
@@ -475,7 +479,7 @@ final class AdStore {
         completedCount = 0
         currentScanTitle = episodes.first?.title ?? "Episode"
 
-        let recognizer = LiveSpeechRecognizer()
+        let recognizer: any WordRecognizer = makeOnDeviceRecognizer()
         scanTask = Task { [weak self] in
             _ = await recognizer.requestAuthorization()
             for (index, episode) in episodes.enumerated() {
@@ -516,7 +520,7 @@ final class AdStore {
         client: ABSClient?,
         downloads: DownloadStore,
         adEngine: AdSkipEngine,
-        recognizer: LiveSpeechRecognizer
+        recognizer: any WordRecognizer
     ) async -> [AdSegment] {
         if useServerDetection {
             let serverCuts = await detectOnServer(for: episode)
@@ -600,11 +604,11 @@ final class AdStore {
         client: ABSClient?,
         downloads: DownloadStore,
         adEngine: AdSkipEngine,
-        recognizer: LiveSpeechRecognizer
+        recognizer: any WordRecognizer
     ) async -> [AdSegment] {
         isScanning = true
         currentScanTitle = episode.title ?? "Episode"
-        scanStatusMessage = "Analyzing on-device with Apple Speech..."
+        scanStatusMessage = "Analyzing on-device with \(recognizer.engineName)..."
         lastDetectionError = nil
         defer {
             if !isBatchScanning {
@@ -706,7 +710,7 @@ final class AdStore {
         client: ABSClient?,
         downloads: DownloadStore,
         adEngine: AdSkipEngine,
-        recognizer: LiveSpeechRecognizer,
+        recognizer: any WordRecognizer,
         runLocal: Bool = true
     ) async {
         isScanning = true
@@ -724,7 +728,7 @@ final class AdStore {
 
         // 2. Run Local Detection
         isScanning = true
-        scanStatusMessage = "Analyzing on-device with Apple Speech..."
+        scanStatusMessage = "Analyzing on-device with \(recognizer.engineName)..."
         _ = await detectLocally(
             for: episode,
             client: client,

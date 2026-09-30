@@ -840,7 +840,7 @@ struct EpisodeDetailView: View {
     @State private var adsViewMode: AdsViewMode = .active
     @State private var showingTipSheet: Bool = false
     @State private var deletingDownloadKey: String?
-    @State private var localScanRecognizer = LiveSpeechRecognizer()
+    @State private var localScanRecognizer: any WordRecognizer = makeOnDeviceRecognizer()
 
     enum EpisodeTab: String, CaseIterable, Identifiable {
         case description = "Description"
@@ -1247,7 +1247,7 @@ struct EpisodeDetailView: View {
             }
 
             // Device Cuts Breakdown
-            Text("Local Device (Apple Speech)")
+            Text("Local Device (\(localScanRecognizer.engineName))")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.purple)
                 .padding(.top, 10)
