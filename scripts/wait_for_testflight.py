@@ -78,6 +78,21 @@ def api(path: str, jwt: str) -> dict:
         raise SystemExit(f"App Store Connect API {path} failed: HTTP {error.code} {error.read()[:200]!r}")
 
 
+def api_patch(path: str, jwt: str, body: dict) -> dict:
+    data = json.dumps(body).encode()
+    request = urllib.request.Request(
+        API + path,
+        data=data,
+        headers={"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"},
+        method="PATCH",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        raise SystemExit(f"App Store Connect API {path} failed: HTTP {error.code} {error.read()[:200]!r}")
+
+
 def app_id_for(bundle_id: str, jwt: str) -> str:
     data = api(f"/v1/apps?filter[bundleId]={bundle_id}", jwt)
     apps = data.get("data", [])
@@ -98,11 +113,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     jwt = token(args.key_path, args.key_id, args.issuer)
+    jwt_issued = time.time()
     app_id = app_id_for(args.bundle_id, jwt)
     print(f"waiting for build {args.build} of app {app_id} ({args.bundle_id})", flush=True)
     deadline = time.time() + args.timeout
     last_state = None
     while True:
+        if time.time() - jwt_issued > 780:
+            jwt = token(args.key_path, args.key_id, args.issuer)
+            jwt_issued = time.time()
         data = api(f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=20", jwt)
         for build in data.get("data", []):
             attributes = build["attributes"]
@@ -113,6 +132,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"build {attributes.get('version')}: {state} (uploaded {attributes.get('uploadedDate')})", flush=True)
                 last_state = state
             if state == "VALID":
+                if attributes.get("usesNonExemptEncryption") is None:
+                    # The Info.plist key does not survive our generated plist,
+                    # and Apple withholds builds without a declaration from
+                    # TestFlight. Declare it so the build actually distributes.
+                    build_id = build["id"]
+                    api_patch(
+                        f"/v1/builds/{build_id}",
+                        jwt,
+                        {
+                            "data": {
+                                "attributes": {"usesNonExemptEncryption": False},
+                                "id": build_id,
+                                "type": "builds",
+                            }
+                        },
+                    )
+                    print(f"build {args.build}: declared usesNonExemptEncryption=false", flush=True)
                 print(f"build {args.build} is ready in TestFlight", flush=True)
                 return 0
             if state == "INVALID":
