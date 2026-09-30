@@ -113,6 +113,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Fetch Ultra weights (bundled)
+        run: sh scripts/fetch-ultra-weights.sh
+
       - name: Generate project
         run: xcodegen generate
 

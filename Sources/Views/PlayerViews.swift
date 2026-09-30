@@ -421,7 +421,7 @@ struct SettingsView: View {
                             Text(engine.displayName).tag(engine)
                         }
                     }
-                    Text("Parakeet Ultra runs without Photon. Until its weights are downloaded, scans fall back to Apple Speech automatically.")
+                    Text("Parakeet Ultra runs fully on-device with bundled weights: no Photon, no Apple Speech prompt. Apple Speech stays available as a manual pick.")
                         .font(.footnote)
                         .foregroundStyle(QuartoTheme.muted)
                     Button {

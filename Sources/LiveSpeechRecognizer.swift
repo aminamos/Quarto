@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 public final class LiveSpeechRecognizer: ObservableObject, WordRecognizer, Sendable {
     public let engineName = "Apple Speech"
+    public var lastError: String? { nil }
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?

@@ -7,6 +7,7 @@ import Testing
 final class FakeWordRecognizer: WordRecognizer, Sendable {
     let engineName = "Fake"
     private(set) var isListening = false
+    var lastError: String? { nil }
     var script: [(String, Double, Double)] = []
     var fileResult = true
 
@@ -105,5 +106,77 @@ struct WordRecognizerTests {
     @Test func liveRecognizerConforms() {
         let recognizer: any WordRecognizer = LiveSpeechRecognizer()
         #expect(recognizer.engineName == "Apple Speech")
+    }
+
+    @Test func ultraNeverFallsBackToApple() {
+        let saved = OnDeviceSpeechEngine.stored
+        defer { OnDeviceSpeechEngine.stored = saved }
+        OnDeviceSpeechEngine.stored = .parakeetUltra
+        #expect(makeOnDeviceRecognizer() is UltraSpeechRecognizer)
+        OnDeviceSpeechEngine.stored = .appleSpeech
+        #expect(makeOnDeviceRecognizer() is LiveSpeechRecognizer)
+    }
+}
+
+struct UltraAlignmentTests {
+    @Test func groupsBpePiecesIntoTimedWords() {
+        // Real sherpa output uses plain-space word markers.
+        let words = UltraTranscriber.align(
+            tokens: [" Hel", "lo", " world"],
+            starts: [0.0, 0.08, 0.16],
+            durations: [0.08, 0.08, 0.24]
+        )
+        #expect(words.count == 2)
+        #expect(words[0].text == "Hello")
+        #expect(words[0].startTime == 0.0)
+        #expect(words[0].endTime == 0.16)
+        #expect(words[1].text == "world")
+        #expect(words[1].startTime == 0.16)
+        #expect(words[1].endTime == 0.40)
+        // Vocab-file ▁ markers group identically.
+        let alt = UltraTranscriber.align(
+            tokens: ["▁Hel", "lo"],
+            starts: [1.0, 1.08],
+            durations: [0.08, 0.08]
+        )
+        #expect(alt.map(\.text) == ["Hello"])
+        #expect(alt[0].startTime == 1.0)
+    }
+
+    @Test func skipsSpecialTokensAndFallsBackWithoutDurations() {
+        let words = UltraTranscriber.align(
+            tokens: ["<blk>", "▁go", "▁", "▁now"],
+            starts: [0.0, 0.5, 0.6, 0.7],
+            durations: []
+        )
+        #expect(words.map(\.text) == ["go", "now"])
+        #expect(words[0].startTime == 0.5)
+        #expect(words[0].endTime > words[0].startTime)
+        #expect(words[1].startTime == 0.7)
+    }
+
+    @Test func emptyInputYieldsNoWords() {
+        #expect(UltraTranscriber.align(tokens: [], starts: [], durations: []).isEmpty)
+    }
+
+    @Test func chunkBoundsCoverAudioSequentially() {
+        let bounds = UltraTranscriber.chunkBounds(sampleCount: 70 * 16000, sampleRate: 16000, chunkSeconds: 30)
+        #expect(bounds.count == 3)
+        #expect(bounds[0] == 0..<(30 * 16000))
+        #expect(bounds[1] == (30 * 16000)..<(60 * 16000))
+        #expect(bounds[2] == (60 * 16000)..<(70 * 16000))
+        #expect(UltraTranscriber.chunkBounds(sampleCount: 0, sampleRate: 16000, chunkSeconds: 30).isEmpty)
+    }
+
+    @Test func bundledLayoutProbe() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ultra-layout-\(UUID().uuidString)", isDirectory: true)
+        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(UltraModelFiles(directory: dir).isComplete == false)
+        for name in ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"] {
+            FileManager.default.createFile(atPath: dir.appendingPathComponent(name).path, contents: Data([0]))
+        }
+        #expect(UltraModelFiles(directory: dir).isComplete == true)
     }
 }

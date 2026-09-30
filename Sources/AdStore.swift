@@ -683,7 +683,7 @@ final class AdStore {
             adEngine.resetStream()
             var collectedAds: [AdSegment] = []
 
-            _ = await recognizer.transcribeFile(url: fileURL) { [weak self] word, start, end in
+            let transcribed = await recognizer.transcribeFile(url: fileURL) { [weak self] word, start, end in
                 if let ad = adEngine.feedWord(word, startTime: start, endTime: end) {
                     if let idx = collectedAds.firstIndex(where: { abs($0.startTime - ad.startTime) < 5 }) {
                         collectedAds[idx] = ad
@@ -692,6 +692,9 @@ final class AdStore {
                     }
                     self?.lastDetectedCount = collectedAds.count
                 }
+            }
+            if !transcribed, let engineError = recognizer.lastError {
+                lastDetectionError = engineError
             }
 
             for ad in collectedAds {

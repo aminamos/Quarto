@@ -6,3 +6,4 @@ build/
 build_*/
 Rust/quarto-adskip/target/
 Quarto.xcodeproj/
+Sources/Models/parakeet-ultra/

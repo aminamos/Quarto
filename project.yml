@@ -11,6 +11,10 @@ settings:
     CURRENT_PROJECT_VERSION: 1
     SWIFT_VERSION: 6.0
     DEVELOPMENT_TEAM: 2BN99U32MZ
+packages:
+  sherpa-onnx:
+    url: https://github.com/k2-fsa/sherpa-onnx
+    version: 1.13.8
 targets:
   Quarto:
     type: application
@@ -22,9 +26,16 @@ targets:
       - path: Sources
         excludes:
           - Info.plist
+          - Models/parakeet-ultra
+      - path: Sources/Models/parakeet-ultra
+        buildPhase: resources
+        type: folder
+        optional: true
     dependencies:
       - framework: Frameworks/QuartoAdSkip.xcframework
         embed: false
+      - package: sherpa-onnx
+        product: sherpa-onnx
     info:
       path: Sources/Info.plist
       properties:
