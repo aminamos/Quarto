@@ -69,13 +69,31 @@ def token(key_path: Path, key_id: str, issuer: str, lifetime: int = 900) -> str:
     return (signing_input + b"." + b64url(raw)).decode()
 
 
+def _request_with_retry(request: urllib.request.Request, path: str) -> dict:
+    """GET/PATCH with retries for transient network stalls (build 17 died on one)."""
+    delay = 5.0
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            if error.code is not None and 500 <= error.code < 600 and attempt < 5:
+                time.sleep(delay)
+                delay = min(delay * 2, 60.0)
+                continue
+            raise SystemExit(f"App Store Connect API {path} failed: HTTP {error.code} {error.read()[:200]!r}")
+        except (TimeoutError, ConnectionError, urllib.error.URLError, OSError) as error:
+            if attempt < 5:
+                time.sleep(delay)
+                delay = min(delay * 2, 60.0)
+                continue
+            raise SystemExit(f"App Store Connect API {path} failed after retries: {error!r}")
+    raise SystemExit(f"App Store Connect API {path} failed after retries")
+
+
 def api(path: str, jwt: str) -> dict:
     request = urllib.request.Request(API + path, headers={"Authorization": f"Bearer {jwt}"})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        raise SystemExit(f"App Store Connect API {path} failed: HTTP {error.code} {error.read()[:200]!r}")
+    return _request_with_retry(request, path)
 
 
 def api_patch(path: str, jwt: str, body: dict) -> dict:
@@ -86,11 +104,7 @@ def api_patch(path: str, jwt: str, body: dict) -> dict:
         headers={"Authorization": f"Bearer {jwt}", "Content-Type": "application/json"},
         method="PATCH",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        raise SystemExit(f"App Store Connect API {path} failed: HTTP {error.code} {error.read()[:200]!r}")
+    return _request_with_retry(request, path)
 
 
 def app_id_for(bundle_id: str, jwt: str) -> str:
