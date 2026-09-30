@@ -132,6 +132,27 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      - name: Import persistent signing identity
+        env:
+          P12_B64: ${{ secrets.IOS_DEV_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DEV_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12_B64" ]; then
+            echo "IOS_DEV_P12_BASE64 not set; automatic signing will mint a fresh cert (see cert-cap incident 2026-09-30)."
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/ci-signing.keychain-db"
+          echo "$P12_B64" | base64 -d > "$RUNNER_TEMP/ci-dev.p12"
+          security create-keychain -p actions "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p actions "$KC"
+          security import "$RUNNER_TEMP/ci-dev.p12" -k "$KC" -P "$P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/xcodebuild -T /usr/bin/security
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$KC" >/dev/null
+          security find-identity -v -p codesigning "$KC"
+          rm -f "$RUNNER_TEMP/ci-dev.p12"
+
       - name: Archive for App Store
         run: >
           xcodebuild archive
