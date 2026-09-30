@@ -60,8 +60,8 @@ final class PlayerController {
     var onPlaybackFinished: (() -> Void)?
     var silenceStore: SilenceStore?
     let adEngine = AdSkipEngine()
-    let recognizer = LiveSpeechRecognizer()
-    private let fileRecognizer = LiveSpeechRecognizer()
+    let recognizer: any WordRecognizer = makeOnDeviceRecognizer()
+    private let fileRecognizer: any WordRecognizer = makeOnDeviceRecognizer()
     private var adScanTask: Task<Void, Never>?
     private var silenceScanTask: Task<Void, Never>?
     private var silenceScanGeneration = 0
